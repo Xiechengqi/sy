@@ -79,7 +79,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sy-${{ matrix.target }}
+          name: sy-${{ matrix.arch }}
           path: ${{ env.RELEASE_ASSET }}
 
   release:
