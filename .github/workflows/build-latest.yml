@@ -31,6 +31,49 @@ jobs:
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
+      - name: Setup cross build environment
+        run: |
+          mkdir -p .cross
+
+          # Dockerfile for x86_64-musl with OpenSSL
+          cat > .cross/Dockerfile.x86_64 << 'DOCKERFILE'
+          FROM ghcr.io/cross-rs/x86_64-unknown-linux-musl:main
+          RUN apt-get update && apt-get install -y wget musl-tools && \
+              wget https://www.openssl.org/source/openssl-3.0.16.tar.gz && \
+              tar xzf openssl-3.0.16.tar.gz && \
+              cd openssl-3.0.16 && \
+              CC=musl-gcc ./Configure no-shared no-async --prefix=/usr/local/musl --openssldir=/usr/local/musl/ssl linux-x86_64 && \
+              make -j$(nproc) && make install && \
+              cd .. && rm -rf openssl-3.0.16*
+          ENV OPENSSL_DIR=/usr/local/musl
+          ENV OPENSSL_STATIC=1
+          ENV PKG_CONFIG_ALLOW_CROSS=1
+          DOCKERFILE
+
+          # Dockerfile for aarch64-musl with OpenSSL
+          cat > .cross/Dockerfile.aarch64 << 'DOCKERFILE'
+          FROM ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
+          RUN apt-get update && apt-get install -y wget && \
+              wget https://www.openssl.org/source/openssl-3.0.16.tar.gz && \
+              tar xzf openssl-3.0.16.tar.gz && \
+              cd openssl-3.0.16 && \
+              ./Configure no-shared no-async --prefix=/usr/local/musl --openssldir=/usr/local/musl/ssl --cross-compile-prefix=aarch64-linux-musl- linux-aarch64 && \
+              make -j$(nproc) && make install && \
+              cd .. && rm -rf openssl-3.0.16*
+          ENV OPENSSL_DIR=/usr/local/musl
+          ENV OPENSSL_STATIC=1
+          ENV PKG_CONFIG_ALLOW_CROSS=1
+          DOCKERFILE
+
+          # Cross.toml configuration
+          cat > Cross.toml << 'TOML'
+          [target.x86_64-unknown-linux-musl]
+          dockerfile = ".cross/Dockerfile.x86_64"
+
+          [target.aarch64-unknown-linux-musl]
+          dockerfile = ".cross/Dockerfile.aarch64"
+          TOML
+
       - name: Build release for ${{ matrix.arch }}
         run: cross build --release --locked --target ${{ matrix.target }}
 
